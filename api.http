@@ -1,0 +1,18 @@
+### Send event
+POST http://localhost:3000/events
+Content-Type: application/json
+
+{
+  "source": "web-app",
+  "type": "LOGIN",
+  "severity": "MEDIUM",
+  "timestamp": "2026-01-02T09:30:00Z",
+  "payload": {
+    "user": "khushi"
+  }
+}
+
+###
+
+### Fetch events
+GET http://localhost:3000/events

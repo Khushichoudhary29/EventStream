@@ -1,12 +1,12 @@
 const express = require("express");
-
 const app = express();
+
+const eventsRouter = require("./events");
+
+app.use(express.json());
+app.use("/events", eventsRouter);
+
 const PORT = 3000;
-
-app.get("/", (req, res) => {
-  res.json({ message: "EventStream backend running" });
-});
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
