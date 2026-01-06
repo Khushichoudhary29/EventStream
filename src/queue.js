@@ -1,5 +1,6 @@
 const eventQueue = [];
 
+
 function enqueueEvent(event) {
   eventQueue.push(event);
 }

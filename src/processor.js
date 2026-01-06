@@ -3,12 +3,18 @@ const { addEvent } = require("./events");
 const { shouldRetry, incrementRetry } = require("./retry");
 const { addToDLQ } = require("./dlq");
 const metrics = require("./metrics");
+const processedIds = new Set();
+
 
 function processEvent(event) {
   // Simulate failure for demo
-  if (event.type === "LOGIN" && Math.random() < 0.4) {
-    throw new Error("Random processing failure");
-  }
+  if (processedIds.has(event.id)) {
+  console.log("Duplicate event ignored:", event.id);
+  return;
+}
+
+processedIds.add(event.id);
+
 
   addEvent({
     ...event,

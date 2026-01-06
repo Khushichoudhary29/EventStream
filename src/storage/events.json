@@ -1,0 +1,38 @@
+[
+  {
+    "id": "e9f9bea088e7fde1d9d8fdba8097c72ce3227edec4cf0329cf6b07ab7258b8a1",
+    "source": "web-app",
+    "type": "LOGIN",
+    "severity": "MEDIUM",
+    "timestamp": "2026-01-02T09:30:00Z",
+    "payload": {
+      "user": "khushi"
+    },
+    "retryCount": 0,
+    "processedAt": "2026-01-04T08:30:55.697Z"
+  },
+  {
+    "id": "85f7f16eec806305ce489da589c15e4bea7cf57c75064a215172a0a42d653d21",
+    "source": "web-app",
+    "type": "LOGIN",
+    "severity": "LOW",
+    "timestamp": "2026-01-04T09:30:00Z",
+    "payload": {
+      "user": "khushi"
+    },
+    "retryCount": 0,
+    "processedAt": "2026-01-04T08:31:55.134Z"
+  },
+  {
+    "id": "0913751c16377f6b7e129070ef3911872cbffebabd333327c5be81bbaa0b5caa",
+    "source": "web-app",
+    "type": "LOGIN",
+    "severity": "MEDIUM",
+    "timestamp": "2026-01-04T09:30:00Z",
+    "payload": {
+      "user": "khushi"
+    },
+    "retryCount": 0,
+    "processedAt": "2026-01-04T08:32:15.277Z"
+  }
+]
