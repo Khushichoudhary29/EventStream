@@ -49,30 +49,6 @@ Client → Express API → Redis Stream → Stream Processor →
 * Crash Recovery (`XPENDING`, `XCLAIM`)
 
 ---
-  ┌─────────┐        POST /events         ┌────────────┐
-  │ Client  │ ─────────────────────────> │ Express API│
-  └─────────┘                           └─────┬──────┘
-                                                │
-                                                │ XADD
-                                                ▼
-                                       ┌────────────────┐
-                                       │ Redis Stream   │
-                                       │  (event-stream)│
-                                       └─────┬──────────┘
-                                             │ XREADGROUP
-                                             ▼
-                              ┌───────────────────────────┐
-                              │ Stream Processor          │
-                              │ (Consumer Group)          │
-                              └───────┬───────┬──────────┘
-                                      │       │
-                                      │       │
-                         ┌────────────┘       └─────────────┐
-                         ▼                                ▼
-                 ┌──────────────┐                 ┌─────────────┐
-                 │ events.json  │                 │ dlq.json    │
-                 │ (Success)    │                 │ (Failed)    │
-                 └──────────────┘                 └─────────────┘
 
 ## 🛠 Tech Stack
 
@@ -105,78 +81,91 @@ EventStream/
 ```
 
 ## 1️⃣ Event Ingestion (index.js)
-Accepts events via REST API
-Validates input
+* Accepts events via REST API
+* Validates input
 
-Assigns:
-id (UUID)
-retryCount
-Pushes events to Redis Stream
+* Assigns:
+ * id (UUID)
+ * retryCount
+ * Pushes events to Redis Stream
 
 📌 Why Redis Streams?
-Persistent
-Ordered
-Supports consumer groups
-Handles crash recovery
+* Persistent
+* Ordered
+* Supports consumer groups
+* Handles crash recovery
 
 ## 2️⃣ Redis Stream (stream.js)
-Responsibilities:
-Initialize Redis connection
-Create stream & consumer group
-Add events using XADD
+* Responsibilities:
+ * Initialize Redis connection
+ * Create stream & consumer group
+ * Add events using XADD
 
 📌 Why consumer groups?
+
 Multiple workers can scale horizontally
+
 Redis tracks which messages are pending
+
 Enables recovery if a worker crashes
 
 ## 3️⃣ Stream Processor (streamProcessor.js)
-Responsibilities:
-Reads events using XREADGROUP
-Processes one event at a time
-Acknowledges events using XACK
+* Responsibilities:
+ * Reads events using XREADGROUP
+ * Processes one event at a time
+ * Acknowledges events using XACK
 
 Processing logic:
+
 ✅ Success → stored in events.json
+
 🔁 Retryable failure → re-added to stream
+
 ❌ Permanent failure → sent to DLQ
+
 📌 This is the heart of the system
 
 ## 4️⃣ Retry Logic (retry.js)
 Controls:
-Maximum retry attempts
-Incrementing retry counters
+ * Maximum retry attempts
+I* ncrementing retry counters
 
 📌 Why retry?
+
 Transient failures (network, timeout) should not kill events.
 
 ## 5️⃣ Dead Letter Queue (dlq.js)
 Stores permanently failed events
+
 Keeps:
+
 original event
+
 failure reason
+
 timestamp
 
 📌 Why DLQ?
+
 In production, failed events must be inspected, not deleted.
 
 ## 6️⃣ Recovery System (recovery.js)
-Uses:
-XPENDING
-XCLAIM
+* Uses:
+ * XPENDING
+ * XCLAIM
 
-Purpose:
-Detect messages stuck with crashed consumers
-Reassign them to active consumers
+* Purpose:
+ * Detect messages stuck with crashed consumers
+ * Reassign them to active consumers
 
 ## 7️⃣ Metrics (metrics.js)
-Tracks:
-processed events
-failed events
-retried events
+* Tracks:
+ * processed events
+ * failed events
+ * retried events
 
-Exposed via:
-GET /metrics
+* Exposed via:
+ * GET /metrics
 
 📌 Observability is mandatory in real systems
 
@@ -300,7 +289,9 @@ http://localhost:3000
 ## 🎯 Project Status
 
 ✅ Core features completed
+
 ✅ Stable & tested locally
+
 ✅ Ready for GitHub
 
 Possible future improvements (optional):
@@ -323,23 +314,25 @@ This project demonstrates:
 ---
 
 ## Future Enhancements
-Technical
-Persist processed events in PostgreSQL / MongoDB
-Multiple consumers for parallel processing
-Docker Compose setup (API + Redis)
-Authentication & rate limiting
+* Technical
+ * Persist processed events in PostgreSQL / MongoDB
+ * Multiple consumers for parallel processing
+ * Docker Compose setup (API + Redis)
+ * Authentication & rate limiting
 
-System
-Event schema versioning
-Exponential backoff retry
-Separate retry stream
-Admin dashboard / alerts on DLQ growth
+* System
+ * Event schema versioning
+ * Exponential backoff retry
+ * Separate retry stream
+ * Admin dashboard / alerts on DLQ growth
 
 ---
 
 ## 📝 Notes
 
-Keep redis running (port 6379)
-Use unique CONSUMER_NAME if scaling consumers
-MAX_RETRIES can be configured in retry.js
-IDLE_TIME_MS in recovery.js controls when pending events are reclaimed
+* Keep redis running (port 6379)
+* Use unique CONSUMER_NAME if scaling consumers
+* MAX_RETRIES can be configured in retry.js
+* IDLE_TIME_MS in recovery.js controls when pending events are reclaimed
+
+---
