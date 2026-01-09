@@ -1,20 +1,27 @@
-const eventQueue = [];
+const { createClient } = require("redis");
 
+const client = createClient({
+  url: "redis://localhost:6379"
+});
 
-function enqueueEvent(event) {
-  eventQueue.push(event);
+client.on("error", (err) => {
+  console.error("Redis Client Error", err);
+});
+
+(async () => {
+  await client.connect();
+  console.log("Redis connected");
+})();
+
+const QUEUE_KEY = "eventstream:queue";
+
+async function enqueueEvent(event) {
+  await client.rPush(QUEUE_KEY, JSON.stringify(event));
 }
 
-function dequeueEvent() {
-  return eventQueue.shift();
+async function dequeueEvent() {
+  const result = await client.lPop(QUEUE_KEY);
+  return result ? JSON.parse(result) : null;
 }
 
-function getQueueSize() {
-  return eventQueue.length;
-}
-
-module.exports = {
-  enqueueEvent,
-  dequeueEvent,
-  getQueueSize
-};
+module.exports = { enqueueEvent, dequeueEvent };

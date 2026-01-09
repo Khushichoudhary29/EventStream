@@ -24,9 +24,9 @@ processedIds.add(event.id);
   metrics.inc("processed");
 }
 
-function startProcessor() {
-  setInterval(() => {
-    const event = dequeueEvent();
+async function startProcessor() {
+  setInterval(async () => {
+    const event = await dequeueEvent();
     if (!event) return;
 
     try {
@@ -34,16 +34,9 @@ function startProcessor() {
       processEvent(event);
     } catch (err) {
       console.error("Processing failed:", err.message);
-      metrics.inc("failed");
-
-      if (shouldRetry(event)) {
-        metrics.inc("retried");
-        enqueueEvent(incrementRetry(event));
-      } else {
-        addToDLQ(event, err.message);
-      }
     }
   }, 1000);
 }
+
 
 module.exports = { startProcessor };

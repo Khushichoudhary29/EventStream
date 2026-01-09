@@ -1,65 +1,55 @@
 const express = require("express");
+const crypto = require("crypto");
+
 const { enqueueEvent } = require("./queue");
 const { getEvents } = require("./events");
 const { startProcessor } = require("./processor");
 const { getDLQ } = require("./dlq");
 const { getMetrics } = require("./metrics");
-const crypto = require("crypto");
-
+const { validateEvent } = require("./validator");
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-/**
- * Ingest event
- * Adds retryCount at entry point (important for Day 3)
- */
-const { validateEvent } = require("./validator");
-
-app.post("/events", (req, res) => {
+// Ingest event
+app.post("/events", async (req, res) => {
   const error = validateEvent(req.body);
-
   if (error) {
-    return res.status(400).json({
-      error: error
-    });
+    return res.status(400).json({ error });
   }
 
-  enqueueEvent(req.body);
+  const event = {
+    ...req.body,
+    id: crypto.randomUUID(),
+    retryCount: 0
+  };
+
+  await enqueueEvent(event);
 
   res.status(201).json({
-    message: "Event accepted and queued"
+    message: "Event accepted and queued (Redis)",
+    eventId: event.id
   });
 });
 
-
-
-/**
- * View successfully processed events
- */
+// View processed events
 app.get("/events", (req, res) => {
   res.json(getEvents());
 });
 
-/**
- * View permanently failed events (DLQ)
- */
+// View failed events (DLQ)
 app.get("/failed-events", (req, res) => {
   res.json(getDLQ());
 });
 
-/**
- * View system metrics
- */
+// View metrics
 app.get("/metrics", (req, res) => {
   res.json(getMetrics());
 });
 
-/**
- * Start background processor
- */
+// Start background processor
 startProcessor();
 
 app.listen(PORT, () => {
