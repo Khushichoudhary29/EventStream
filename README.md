@@ -1,250 +1,345 @@
-🚀 EventStream — Distributed Event Processing System (Node.js + Redis)
-📌 Overview
+# EventStream Processor
 
-EventStream is a backend system designed to ingest, process, and manage high-volume events in a reliable and fault-tolerant way.
-It simulates how real-world systems (payment systems, log pipelines, analytics platforms) handle asynchronous events using queues, retries, and dead-letter handling.
+A production-inspired **event-driven backend system** built using **Node.js, Express, and Redis Streams**. This project demonstrates how to design a **reliable, fault-tolerant event ingestion and processing pipeline** with retries, dead-letter handling, metrics, and crash recovery.
 
-This project focuses on backend engineering principles, not UI.
+This is not a toy queue — it mirrors real-world backend patterns used in scalable systems and behaves like a mini Kafka-style pipeline using Redis.
 
-🎯 Problem Statement
+---
 
-In real-world systems:
+## 🔍 Problem Statement
 
-Events arrive asynchronously
+Modern backend systems often need to:
 
-Some events fail during processing
+* Accept events quickly (HTTP APIs)
+* Process them asynchronously
+* Handle failures safely
+* Avoid data loss during crashes
 
-Retrying blindly causes duplicates
+Traditional in-memory queues fail under crashes. This project solves that problem using **Redis Streams**.
 
-Failed events must not be lost
+---
 
-Systems must remain observable and debuggable
+## ✅ What This Project Does
 
-Most beginner projects ignore these realities.
+* Accepts incoming events via REST API
+* Stores events durably in Redis Streams
+* Processes events using a background consumer
+* Retries failed events with limits
+* Moves permanently failed events to a Dead Letter Queue (DLQ)
+* Recovers unacknowledged events after crashes
+* Exposes processing metrics
 
-EventStream solves this by implementing:
+---
 
-Queue-based ingestion
+## 🧠 Architecture Overview
 
-Background processing
+**Flow:**
 
-Retry mechanisms
+Client → Express API → Redis Stream → Stream Processor →
 
-Dead Letter Queue (DLQ)
+* Success → Stored events
+* Retry → Re-queued
+* Failure → DLQ
 
-Metrics and observability
+**Key Concepts Used:**
 
-Redis-backed reliability
+* Redis Streams (`XADD`, `XREADGROUP`, `XACK`)
+* Consumer Groups
+* Pending Entries List (PEL)
+* Crash Recovery (`XPENDING`, `XCLAIM`)
 
-🧠 System Architecture
-Client
-  │
-  ▼
-POST /events
-  │
-  ▼
-Redis Queue
-  │
-  ▼
-Background Processor
-  ├── Success → Processed Events Store
-  ├── Retry   → Redis Queue
-  └── Failure → Dead Letter Queue (DLQ)
+---
+  ┌─────────┐        POST /events         ┌────────────┐
+  │ Client  │ ─────────────────────────> │ Express API│
+  └─────────┘                           └─────┬──────┘
+                                                │
+                                                │ XADD
+                                                ▼
+                                       ┌────────────────┐
+                                       │ Redis Stream   │
+                                       │  (event-stream)│
+                                       └─────┬──────────┘
+                                             │ XREADGROUP
+                                             ▼
+                              ┌───────────────────────────┐
+                              │ Stream Processor          │
+                              │ (Consumer Group)          │
+                              └───────┬───────┬──────────┘
+                                      │       │
+                                      │       │
+                         ┌────────────┘       └─────────────┐
+                         ▼                                ▼
+                 ┌──────────────┐                 ┌─────────────┐
+                 │ events.json  │                 │ dlq.json    │
+                 │ (Success)    │                 │ (Failed)    │
+                 └──────────────┘                 └─────────────┘
 
-⚙️ Tech Stack
+## 🛠 Tech Stack
 
-Node.js (Backend runtime)
+* **Node.js** (v18+)
+* **Express.js** – REST API
+* **Redis** – Stream-based message queue
+* **ioredis** – Redis client
 
-Express.js (API layer)
+---
 
-Redis (Queue & reliability layer)
+## 📁 Project Structure
 
-Docker (Redis containerization)
-
-Crypto (Event IDs & idempotency)
-
-REST APIs (System interaction)
-
-✨ Key Features
-1️⃣ Event Ingestion API
-
-Accepts JSON events via REST
-
-Validates required fields
-
-Assigns unique event IDs
-
-Pushes events into Redis queue
-
-2️⃣ Redis-backed Queue
-
-Replaces in-memory queues
-
-Ensures durability and scalability
-
-Decouples ingestion from processing
-
-3️⃣ Background Worker
-
-Runs independently of API
-
-Pulls events from Redis
-
-Processes events asynchronously
-
-4️⃣ Retry Mechanism
-
-Failed events are retried
-
-Retry count tracked per event
-
-Prevents infinite retry loops
-
-5️⃣ Dead Letter Queue (DLQ)
-
-Permanently failed events are isolated
-
-Failure reason is stored
-
-Enables debugging without data loss
-
-6️⃣ Idempotency Handling
-
-Duplicate events are detected
-
-Prevents double processing
-
-Critical for real-world systems
-
-7️⃣ Metrics & Observability
-
-Tracks processed, failed, retried events
-
-Exposed via /metrics endpoint
-
-Helps monitor system health
-
-📂 Project Structure
+```
 EventStream/
 │
 ├── src/
-│   ├── index.js        # Express API entry point
-│   ├── queue.js        # Redis queue logic
-│   ├── processor.js   # Background worker
-│   ├── events.js      # Processed event storage
-│   ├── dlq.js         # Dead Letter Queue
-│   ├── retry.js       # Retry policy
-│   ├── validator.js   # Input validation
-│   └── metrics.js     # System metrics
+│   ├── index.js              # Express server entry point
+│   ├── stream.js             # Redis stream & consumer group setup
+│   ├── streamProcessor.js    # Background event processor
+│   ├── recovery.js           # Pending event recovery logic
+│   ├── retry.js              # Retry strategy
+│   ├── queue.js              # (legacy / optional)
+│   ├── events.js             # Processed events store
+│   ├── dlq.js                # Dead Letter Queue
+│   ├── metrics.js            # Metrics tracking
+│   └── validator.js          # Event validation
 │
-├── data/               # Local storage (JSON files)
-├── README.md
-└── package.json
+├── package.json
+└── README.md
+```
 
-🚦 API Endpoints
-➤ Ingest Event
-POST /events
+## 1️⃣ Event Ingestion (index.js)
+Accepts events via REST API
+Validates input
 
+Assigns:
+id (UUID)
+retryCount
+Pushes events to Redis Stream
 
-Request Body
+📌 Why Redis Streams?
+Persistent
+Ordered
+Supports consumer groups
+Handles crash recovery
 
+## 2️⃣ Redis Stream (stream.js)
+Responsibilities:
+Initialize Redis connection
+Create stream & consumer group
+Add events using XADD
+
+📌 Why consumer groups?
+Multiple workers can scale horizontally
+Redis tracks which messages are pending
+Enables recovery if a worker crashes
+
+## 3️⃣ Stream Processor (streamProcessor.js)
+Responsibilities:
+Reads events using XREADGROUP
+Processes one event at a time
+Acknowledges events using XACK
+
+Processing logic:
+✅ Success → stored in events.json
+🔁 Retryable failure → re-added to stream
+❌ Permanent failure → sent to DLQ
+📌 This is the heart of the system
+
+## 4️⃣ Retry Logic (retry.js)
+Controls:
+Maximum retry attempts
+Incrementing retry counters
+
+📌 Why retry?
+Transient failures (network, timeout) should not kill events.
+
+## 5️⃣ Dead Letter Queue (dlq.js)
+Stores permanently failed events
+Keeps:
+original event
+failure reason
+timestamp
+
+📌 Why DLQ?
+In production, failed events must be inspected, not deleted.
+
+## 6️⃣ Recovery System (recovery.js)
+Uses:
+XPENDING
+XCLAIM
+
+Purpose:
+Detect messages stuck with crashed consumers
+Reassign them to active consumers
+
+## 7️⃣ Metrics (metrics.js)
+Tracks:
+processed events
+failed events
+retried events
+
+Exposed via:
+GET /metrics
+
+📌 Observability is mandatory in real systems
+
+---
+
+## 🌐 API Endpoints
+
+### 1️⃣ Ingest Event
+
+`POST /events`
+
+**Request Body:**
+
+```json
 {
-  "type": "LOGIN",
+  "type": "USER_SIGNUP",
   "payload": {
-    "user": "khushi"
+    "userId": "123"
   }
 }
+```
 
+**Response:**
 
-Response
-
+```json
 {
   "message": "Event accepted and queued (Redis)",
   "eventId": "uuid"
 }
+```
 
-➤ View Processed Events
-GET /events
+---
 
-➤ View Failed Events (DLQ)
-GET /failed-events
+### 2️⃣ View Processed Events
 
-➤ View Metrics
-GET /metrics
+`GET /events`
 
-▶️ How to Run Locally
-1️⃣ Start Redis (Docker)
-docker run -d -p 6379:6379 redis
+---
 
+### 3️⃣ View Failed Events (DLQ)
 
-Verify:
+`GET /failed-events`
 
-docker exec -it <container_name> redis-cli ping
+---
 
+### 4️⃣ View Metrics
 
-Expected:
+`GET /metrics`
 
-PONG
+Example metrics:
 
-2️⃣ Install Dependencies
+```json
+{
+  "processed": 10,
+  "failed": 2,
+  "retried": 1
+}
+```
+
+---
+
+## 🔁 Retry & Failure Handling
+
+* Each event has a retry counter
+* Failed events are retried until limit is reached
+* After max retries, event is moved to **Dead Letter Queue (DLQ)**
+
+This prevents infinite retry loops.
+
+---
+
+## ♻️ Crash Recovery (Important)
+
+If the server crashes **after reading but before acknowledging** an event:
+
+* Redis keeps the event in the **Pending Entries List (PEL)**
+* On restart, `recovery.js`:
+
+  * Scans pending events
+  * Claims stuck events using `XCLAIM`
+  * Reprocesses them safely
+
+This guarantees **at-least-once delivery**.
+
+---
+
+## 🚀 How to Run Locally
+
+### 1️⃣ Start Redis
+
+```bash
+redis-server
+```
+
+*or using Docker*
+
+```bash
+docker run -p 6379:6379 redis
+```
+
+### 2️⃣ Install Dependencies
+
+```bash
 npm install
+```
 
-3️⃣ Start Server
+### 3️⃣ Start Server
+
+```bash
 node src/index.js
+```
 
-🧪 Testing
+Server runs on:
 
-Use Postman or VS Code REST Client
+```
+http://localhost:3000
+```
 
-Send POST requests to /events
+---
 
-Observe:
+## 🎯 Project Status
 
-Redis queue behavior
+✅ Core features completed
+✅ Stable & tested locally
+✅ Ready for GitHub
 
-Retry handling
+Possible future improvements (optional):
 
-DLQ population
+* Persistent database storage
+* Multiple consumers
+* Rate limiting
+* Docker Compose
 
-Metrics incrementing
+---
 
-🚀 Future Enhancements
+## 📌 Why This Project Matters
 
-Planned improvements to make this production-grade:
+This project demonstrates:
 
-Redis Streams & Consumer Groups
+* Understanding of **distributed systems basics**
+* Real-world **message queue patterns**
+* Fault tolerance & recovery strategies
 
-Persistent database (PostgreSQL)
+---
 
-Authentication (API keys / JWT)
+## Future Enhancements
+Technical
+Persist processed events in PostgreSQL / MongoDB
+Multiple consumers for parallel processing
+Docker Compose setup (API + Redis)
+Authentication & rate limiting
 
-Rate limiting
+System
+Event schema versioning
+Exponential backoff retry
+Separate retry stream
+Admin dashboard / alerts on DLQ growth
 
-Event replay support
+---
 
-Horizontal worker scaling
+## 📝 Notes
 
-Docker Compose setup
-
-Cloud deployment (AWS / GCP)
-
-Structured logging (Winston / OpenTelemetry)
-
-🧑‍💻 Learning Outcomes
-
-This project demonstrates hands-on understanding of:
-
-Asynchronous systems
-
-Queue-based architectures
-
-Fault tolerance
-
-Backend scalability patterns
-
-Real-world system design
-
-📌 Final Note
-
-This is not a tutorial project.
-It is a learning-focused backend system designed to mirror real production challenges.
+Keep redis running (port 6379)
+Use unique CONSUMER_NAME if scaling consumers
+MAX_RETRIES can be configured in retry.js
+IDLE_TIME_MS in recovery.js controls when pending events are reclaimed
