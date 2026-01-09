@@ -1,37 +1,43 @@
-const { redis, STREAM_KEY, GROUP_NAME } = require("./stream");
+const {
+  redis,
+  STREAM_KEY,
+  GROUP_NAME,
+  CONSUMER_NAME
+} = require("./stream");
+
 const { addEvent } = require("./events");
 const { shouldRetry, incrementRetry } = require("./retry");
 const { addToDLQ } = require("./dlq");
 const metrics = require("./metrics");
 
-const CONSUMER_NAME = "consumer-1";
-
-function startStreamProcessor() {
+async function startStreamProcessor() {
   console.log("Stream processor started");
 
-  setInterval(async () => {
+  while (true) {
     try {
-      const res = await redis.xreadgroup(
+      const response = await redis.xreadgroup(
         "GROUP",
         GROUP_NAME,
         CONSUMER_NAME,
+        "BLOCK",
+        5000,
         "COUNT",
         1,
-        "BLOCK",
-        2000,
         "STREAMS",
         STREAM_KEY,
         ">"
       );
 
-      if (!res) return;
+      if (!response) continue;
 
-      const messages = res[0][1];
+      const [[, messages]] = response;
 
       for (const [id, fields] of messages) {
         const event = JSON.parse(fields[1]);
 
         try {
+          console.log("Processing stream event:", event.type);
+
           addEvent({
             ...event,
             processedAt: new Date().toISOString()
@@ -39,7 +45,6 @@ function startStreamProcessor() {
 
           metrics.inc("processed");
 
-          // ACK message
           await redis.xack(STREAM_KEY, GROUP_NAME, id);
         } catch (err) {
           metrics.inc("failed");
@@ -49,7 +54,7 @@ function startStreamProcessor() {
             await redis.xadd(
               STREAM_KEY,
               "*",
-              "event",
+              "data",
               JSON.stringify(incrementRetry(event))
             );
           } else {
@@ -62,7 +67,7 @@ function startStreamProcessor() {
     } catch (err) {
       console.error("Stream processor error:", err.message);
     }
-  }, 1000);
+  }
 }
 
 module.exports = { startStreamProcessor };

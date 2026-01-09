@@ -1,19 +1,34 @@
 const express = require("express");
 const crypto = require("crypto");
 
-const { enqueueEvent } = require("./queue");
 const { getEvents } = require("./events");
-const { startProcessor } = require("./processor");
 const { getDLQ } = require("./dlq");
 const { getMetrics } = require("./metrics");
 const { validateEvent } = require("./validator");
+
+const { initStream, addEventToStream } = require("./stream");
+const { startStreamProcessor } = require("./streamProcessor");
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-// Ingest event
+/**
+ * Initialize Redis Stream
+ */
+initStream()
+  .then(() => {
+    console.log("Redis stream initialized");
+  })
+  .catch((err) => {
+    console.error("Failed to init Redis stream", err);
+    process.exit(1);
+  });
+
+/**
+ * Ingest event
+ */
 app.post("/events", async (req, res) => {
   const error = validateEvent(req.body);
   if (error) {
@@ -23,34 +38,43 @@ app.post("/events", async (req, res) => {
   const event = {
     ...req.body,
     id: crypto.randomUUID(),
-    retryCount: 0
+    retryCount: 0,
+    createdAt: Date.now()
   };
 
-  await enqueueEvent(event);
+  await addEventToStream(event);
 
   res.status(201).json({
-    message: "Event accepted and queued (Redis)",
+    message: "Event accepted and queued (Redis Stream)",
     eventId: event.id
   });
 });
 
-// View processed events
+/**
+ * View processed events
+ */
 app.get("/events", (req, res) => {
   res.json(getEvents());
 });
 
-// View failed events (DLQ)
+/**
+ * View permanently failed events (DLQ)
+ */
 app.get("/failed-events", (req, res) => {
   res.json(getDLQ());
 });
 
-// View metrics
+/**
+ * View system metrics
+ */
 app.get("/metrics", (req, res) => {
   res.json(getMetrics());
 });
 
-// Start background processor
-startProcessor();
+/**
+ * Start Redis Stream processor
+ */
+startStreamProcessor();
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
