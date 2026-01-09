@@ -1,3 +1,5 @@
+const { recoverPending } = require("./recovery");
+
 const {
   redis,
   STREAM_KEY,
@@ -12,6 +14,8 @@ const metrics = require("./metrics");
 
 async function startStreamProcessor() {
   console.log("Stream processor started");
+
+  await recoverPending(CONSUMER_NAME);
 
   while (true) {
     try {
