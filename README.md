@@ -85,9 +85,9 @@ EventStream/
 * Validates input
 
 * Assigns:
- * id (UUID)
- * retryCount
- * Pushes events to Redis Stream
+  * id (UUID)
+  * retryCount
+  * Pushes events to Redis Stream
 
 📌 Why Redis Streams?
 * Persistent
@@ -97,23 +97,20 @@ EventStream/
 
 ## 2️⃣ Redis Stream (stream.js)
 * Responsibilities:
- * Initialize Redis connection
- * Create stream & consumer group
- * Add events using XADD
+  * Initialize Redis connection
+  * Create stream & consumer group
+  * Add events using XADD
 
 📌 Why consumer groups?
-
-Multiple workers can scale horizontally
-
-Redis tracks which messages are pending
-
-Enables recovery if a worker crashes
+  * Multiple workers can scale horizontally
+  * Redis tracks which messages are pending
+  * Enables recovery if a worker crashes
 
 ## 3️⃣ Stream Processor (streamProcessor.js)
 * Responsibilities:
- * Reads events using XREADGROUP
- * Processes one event at a time
- * Acknowledges events using XACK
+  * Reads events using XREADGROUP
+  * Processes one event at a time
+  * Acknowledges events using XACK
 
 Processing logic:
 
@@ -135,15 +132,11 @@ I* ncrementing retry counters
 Transient failures (network, timeout) should not kill events.
 
 ## 5️⃣ Dead Letter Queue (dlq.js)
-Stores permanently failed events
-
-Keeps:
-
-original event
-
-failure reason
-
-timestamp
+* Stores permanently failed events
+* Keeps:
+  * original event
+  * failure reason
+  * timestamp
 
 📌 Why DLQ?
 
@@ -151,21 +144,21 @@ In production, failed events must be inspected, not deleted.
 
 ## 6️⃣ Recovery System (recovery.js)
 * Uses:
- * XPENDING
- * XCLAIM
+  * XPENDING
+  * XCLAIM
 
 * Purpose:
- * Detect messages stuck with crashed consumers
- * Reassign them to active consumers
+  * Detect messages stuck with crashed consumers
+  * Reassign them to active consumers
 
 ## 7️⃣ Metrics (metrics.js)
 * Tracks:
- * processed events
- * failed events
- * retried events
+  * processed events
+  * failed events
+  * retried events
 
 * Exposed via:
- * GET /metrics
+  * GET /metrics
 
 📌 Observability is mandatory in real systems
 
@@ -315,16 +308,16 @@ This project demonstrates:
 
 ## Future Enhancements
 * Technical
- * Persist processed events in PostgreSQL / MongoDB
- * Multiple consumers for parallel processing
- * Docker Compose setup (API + Redis)
- * Authentication & rate limiting
+  * Persist processed events in PostgreSQL / MongoDB
+  * Multiple consumers for parallel processing
+  * Docker Compose setup (API + Redis)
+  * Authentication & rate limiting
 
 * System
- * Event schema versioning
- * Exponential backoff retry
- * Separate retry stream
- * Admin dashboard / alerts on DLQ growth
+  * Event schema versioning
+  * Exponential backoff retry
+  * Separate retry stream
+  * Admin dashboard / alerts on DLQ growth
 
 ---
 
